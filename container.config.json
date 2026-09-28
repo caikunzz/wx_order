@@ -1,0 +1,16 @@
+{
+  "containerPort": 80,
+  "dockerfilePath": "Dockerfile",
+  "buildDir": "./",
+  "minNum": 0,
+  "maxNum": 5,
+  "cpu": 0.25,
+  "mem": 0.5,
+  "policyType": "cpu",
+  "policyThreshold": 60,
+  "initialDelaySeconds": 2,
+  "customLogs": "stdout",
+  "envParams": {
+    "ALLOW_DEV_LOGIN": "0"
+  }
+}

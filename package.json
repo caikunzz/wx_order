@@ -1,0 +1,17 @@
+{
+  "name": "wx-order-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "家庭点菜微信云托管 Express 服务",
+  "scripts": {
+    "dev": "PORT=3000 ALLOW_DEV_LOGIN=1 node --watch src/index.js",
+    "start": "node src/index.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mysql2": "^3.14.0"
+  }
+}
