@@ -59,12 +59,13 @@ export class JsonStore {
     return this.read((db) => db.users.find((user) => user.openid === openid) || null)
   }
 
-  async createUser({ openid, nickname, emoji, profileReady }) {
+  async createUser({ openid, nickname, emoji, avatar, profileReady }) {
     return this.mutate((db) => {
       const user = {
         openid,
         nickname,
         emoji,
+        avatar: avatar || '',
         familyId: null,
         profileReady: !!profileReady,
         createdAt: Date.now(),
@@ -218,6 +219,20 @@ export class JsonStore {
     )
   }
 
+  async removeMealDish({ familyId, date, meal, dishId }) {
+    return this.mutate((db) => {
+      db.orders = db.orders.filter(
+        (item) =>
+          !(
+            item.familyId === familyId &&
+            item.date === date &&
+            item.meal === meal &&
+            item.dishId === dishId
+          ),
+      )
+    })
+  }
+
   async replaceUserOrders({ familyId, openid, date, meal, items }) {
     return this.mutate((db) => {
       db.orders = db.orders.filter(
@@ -278,6 +293,7 @@ function sanitizeUserPatch(patch) {
   const next = {}
   if (patch.nickname !== undefined) next.nickname = patch.nickname
   if (patch.emoji !== undefined) next.emoji = patch.emoji
+  if (patch.avatar !== undefined) next.avatar = patch.avatar
   if (patch.familyId !== undefined) next.familyId = patch.familyId
   if (patch.profileReady !== undefined) next.profileReady = !!patch.profileReady
   return next

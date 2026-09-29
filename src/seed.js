@@ -116,6 +116,7 @@ export function buildSeedDishes(familyId, openid, createId, now = Date.now()) {
     familyId,
     name: dish.name,
     emoji: dish.emoji,
+    image: '',
     category: dish.category,
     note: dish.note,
     ingredients: dish.ingredients.map((item) => ({ ...item })),

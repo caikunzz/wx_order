@@ -4,6 +4,7 @@ export function presentUser(user, family) {
     openid: user.openid,
     nickname: user.nickname,
     emoji: user.emoji,
+    avatar: user.avatar || '',
     familyId: user.familyId || null,
     profileReady: !!user.profileReady,
     isOwner: !!(family && family.ownerOpenid === user.openid),
@@ -25,6 +26,7 @@ export function presentDish(dish) {
     id: dish.id,
     name: dish.name,
     emoji: dish.emoji,
+    image: dish.image || '',
     category: dish.category,
     note: dish.note || '',
     ingredients: Array.isArray(dish.ingredients) ? dish.ingredients : [],
@@ -37,5 +39,6 @@ export function presentMember(user) {
     openid: user.openid,
     nickname: user.nickname,
     emoji: user.emoji,
+    avatar: user.avatar || '',
   }
 }

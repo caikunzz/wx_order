@@ -1,3 +1,4 @@
+import path from 'path'
 import express from 'express'
 import cors from 'cors'
 import { attachUser } from './auth.js'
@@ -7,6 +8,7 @@ import { initStore } from './store/index.js'
 const app = express()
 app.disable('x-powered-by')
 app.use(cors())
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 app.use(express.json({ limit: '1mb' }))
 app.use(attachUser)
 

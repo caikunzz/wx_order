@@ -21,6 +21,7 @@ export class MysqlStore {
         openid VARCHAR(64) PRIMARY KEY,
         nickname VARCHAR(32) NOT NULL,
         emoji VARCHAR(16) NOT NULL,
+        avatar VARCHAR(512) NOT NULL DEFAULT '',
         family_id VARCHAR(32) NULL,
         profile_ready TINYINT NOT NULL DEFAULT 0,
         created_at BIGINT NOT NULL
@@ -44,6 +45,7 @@ export class MysqlStore {
         family_id VARCHAR(32) NOT NULL,
         name VARCHAR(32) NOT NULL,
         emoji VARCHAR(16) NOT NULL,
+        image VARCHAR(512) NOT NULL DEFAULT '',
         category VARCHAR(8) NOT NULL,
         note VARCHAR(200) NOT NULL DEFAULT '',
         ingredients TEXT NOT NULL,
@@ -74,6 +76,17 @@ export class MysqlStore {
     for (const statement of statements) {
       await this.pool.query(statement)
     }
+    const alters = [
+      "ALTER TABLE dishes ADD COLUMN image VARCHAR(512) NOT NULL DEFAULT '' AFTER emoji",
+      "ALTER TABLE users ADD COLUMN avatar VARCHAR(512) NOT NULL DEFAULT '' AFTER emoji",
+    ]
+    for (const statement of alters) {
+      try {
+        await this.pool.query(statement)
+      } catch (error) {
+        if (error.code !== 'ER_DUP_FIELDNAME') throw error
+      }
+    }
   }
 
   async getUser(openid) {
@@ -81,18 +94,19 @@ export class MysqlStore {
     return mapUser(rows[0])
   }
 
-  async createUser({ openid, nickname, emoji, profileReady }) {
+  async createUser({ openid, nickname, emoji, avatar, profileReady }) {
     const user = {
       openid,
       nickname,
       emoji,
+      avatar: avatar || '',
       familyId: null,
       profileReady: !!profileReady,
       createdAt: Date.now(),
     }
     await this.pool.query(
-      'INSERT INTO users (openid, nickname, emoji, family_id, profile_ready, created_at) VALUES (?, ?, ?, NULL, ?, ?)',
-      [user.openid, user.nickname, user.emoji, user.profileReady ? 1 : 0, user.createdAt],
+      'INSERT INTO users (openid, nickname, emoji, avatar, family_id, profile_ready, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)',
+      [user.openid, user.nickname, user.emoji, user.avatar, user.profileReady ? 1 : 0, user.createdAt],
     )
     return user
   }
@@ -102,11 +116,12 @@ export class MysqlStore {
     if (!user) return null
     if (patch.nickname !== undefined) user.nickname = patch.nickname
     if (patch.emoji !== undefined) user.emoji = patch.emoji
+    if (patch.avatar !== undefined) user.avatar = patch.avatar
     if (patch.familyId !== undefined) user.familyId = patch.familyId
     if (patch.profileReady !== undefined) user.profileReady = !!patch.profileReady
     await this.pool.query(
-      'UPDATE users SET nickname = ?, emoji = ?, family_id = ?, profile_ready = ? WHERE openid = ?',
-      [user.nickname, user.emoji, user.familyId, user.profileReady ? 1 : 0, openid],
+      'UPDATE users SET nickname = ?, emoji = ?, avatar = ?, family_id = ?, profile_ready = ? WHERE openid = ?',
+      [user.nickname, user.emoji, user.avatar || '', user.familyId, user.profileReady ? 1 : 0, openid],
     )
     return user
   }
@@ -265,8 +280,16 @@ export class MysqlStore {
     if (!dish) return null
     Object.assign(dish, patch)
     await this.pool.query(
-      'UPDATE dishes SET name = ?, emoji = ?, category = ?, note = ?, ingredients = ? WHERE id = ?',
-      [dish.name, dish.emoji, dish.category, dish.note || '', JSON.stringify(dish.ingredients || []), dishId],
+      'UPDATE dishes SET name = ?, emoji = ?, image = ?, category = ?, note = ?, ingredients = ? WHERE id = ?',
+      [
+        dish.name,
+        dish.emoji,
+        dish.image || '',
+        dish.category,
+        dish.note || '',
+        JSON.stringify(dish.ingredients || []),
+        dishId,
+      ],
     )
     return dish
   }
@@ -295,6 +318,13 @@ export class MysqlStore {
       [familyId, date],
     )
     return rows.map(mapOrder)
+  }
+
+  async removeMealDish({ familyId, date, meal, dishId }) {
+    await this.pool.query(
+      'DELETE FROM orders WHERE family_id = ? AND order_date = ? AND meal = ? AND dish_id = ?',
+      [familyId, date, meal, dishId],
+    )
   }
 
   async replaceUserOrders({ familyId, openid, date, meal, items }) {
@@ -367,12 +397,13 @@ export class MysqlStore {
 
 async function insertDish(executor, dish) {
   await executor.query(
-    'INSERT INTO dishes (id, family_id, name, emoji, category, note, ingredients, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO dishes (id, family_id, name, emoji, image, category, note, ingredients, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       dish.id,
       dish.familyId,
       dish.name,
       dish.emoji,
+      dish.image || '',
       dish.category,
       dish.note || '',
       JSON.stringify(dish.ingredients || []),
@@ -388,6 +419,7 @@ function mapUser(row) {
     openid: row.openid,
     nickname: row.nickname,
     emoji: row.emoji,
+    avatar: row.avatar || '',
     familyId: row.family_id,
     profileReady: !!row.profile_ready,
     createdAt: Number(row.created_at),
@@ -418,6 +450,7 @@ function mapDish(row) {
     familyId: row.family_id,
     name: row.name,
     emoji: row.emoji,
+    image: row.image || '',
     category: row.category,
     note: row.note || '',
     ingredients: Array.isArray(ingredients) ? ingredients : [],

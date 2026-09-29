@@ -5,6 +5,7 @@ import { id, token } from './ids.js'
 import { clip, fail, MEALS, ok, today, validDate, wrap } from './http.js'
 import { presentDish, presentFamily, presentMember, presentUser } from './present.js'
 import { db } from './store/index.js'
+import { receiveImage } from './upload.js'
 
 export const api = Router()
 
@@ -13,6 +14,8 @@ api.post(
   wrap(async (req, res) => {
     const nickname = clip(req.body?.nickname, 12)
     const emoji = clip(req.body?.emoji, 8) || '🍳'
+    const avatar = readAvatar(req.body?.avatar)
+    if (avatar.error) return fail(res, 400, avatar.error)
     let openid = req.wxOpenid
     if (!openid) {
       if (!devLoginAllowed()) return fail(res, 403, '请从微信小程序进入')
@@ -25,14 +28,17 @@ api.post(
         openid,
         nickname: nickname || '家人',
         emoji,
+        avatar: avatar.skip ? '' : avatar.value,
         profileReady: !!nickname,
       })
     } else if (nickname) {
-      user = await db().updateUser(openid, {
+      const patch = {
         nickname,
         emoji,
         profileReady: true,
-      })
+      }
+      if (!avatar.skip) patch.avatar = avatar.value
+      user = await db().updateUser(openid, patch)
     }
     let sessionToken = ''
     if (!req.wxOpenid) {
@@ -62,10 +68,13 @@ api.put(
   wrap(async (req, res) => {
     const nickname = clip(req.body?.nickname, 12)
     const emoji = clip(req.body?.emoji, 8)
+    const avatar = readAvatar(req.body?.avatar)
     if (!nickname) return fail(res, 400, '称呼不能为空')
+    if (avatar.error) return fail(res, 400, avatar.error)
     const user = await db().updateUser(req.user.openid, {
       nickname,
       emoji: emoji || req.user.emoji,
+      avatar: avatar.skip ? req.user.avatar || '' : avatar.value,
       profileReady: true,
     })
     ok(res, await profilePayload(user))
@@ -171,6 +180,16 @@ api.put(
   }),
 )
 
+api.post(
+  '/uploads',
+  requireUser,
+  requireFamily,
+  wrap(async (req, res) => {
+    const image = await receiveImage(req)
+    ok(res, { image })
+  }),
+)
+
 api.delete(
   '/dishes/:id',
   requireUser,
@@ -212,6 +231,7 @@ api.get(
             openid: order.openid,
             nickname: person?.nickname || '家人',
             emoji: person?.emoji || '🙂',
+            avatar: person?.avatar || '',
             note: order.note || '',
           })
         })
@@ -228,6 +248,7 @@ api.get(
         openid: req.user.openid,
         nickname: req.user.nickname,
         emoji: req.user.emoji,
+        avatar: req.user.avatar || '',
       },
       family: presentFamily(family),
       members: members.map((member) => ({
@@ -236,6 +257,27 @@ api.get(
       })),
       meals,
     })
+  }),
+)
+
+api.post(
+  '/orders/remove',
+  requireUser,
+  requireFamily,
+  wrap(async (req, res) => {
+    const date = req.body?.date
+    const meal = req.body?.meal
+    const dishId = String(req.body?.dishId || '')
+    if (!validDate(date)) return fail(res, 400, '日期不正确')
+    if (!MEALS.includes(meal)) return fail(res, 400, '请选择早餐、午餐或晚餐')
+    if (!dishId) return fail(res, 400, '没有这道菜')
+    await db().removeMealDish({
+      familyId: req.user.familyId,
+      date,
+      meal,
+      dishId,
+    })
+    ok(res, { removed: true })
   }),
 )
 
@@ -355,7 +397,29 @@ function parseDish(body) {
     if (!ingredientName) continue
     ingredients.push({ name: ingredientName, amount })
   }
-  return { dish: { name, emoji, category, note, ingredients } }
+  const image = normalizeImage(body?.image)
+  if (image && typeof image === 'object') return image
+  return { dish: { name, emoji, image: image || '', category, note, ingredients } }
+}
+
+function readAvatar(value) {
+  if (value === undefined || value === null) return { skip: true, value: '' }
+  const image = normalizeImage(value)
+  if (image && typeof image === 'object') return image
+  return { value: image || '' }
+}
+
+function normalizeImage(value) {
+  const image = String(value || '').trim()
+  if (!image) return ''
+  if (image.length > 512 || image.includes('..')) return { error: '图片地址不正确' }
+  const allowed =
+    image.startsWith('cloud://') ||
+    image.startsWith('https://') ||
+    image.startsWith('http://') ||
+    image.startsWith('/uploads/')
+  if (!allowed) return { error: '图片地址不正确' }
+  return image
 }
 
 async function profilePayload(user) {
